@@ -39,7 +39,7 @@ permissions:
 env:
   # The one variable that separates the arms: on baseline, action-checkout
   # skips its Set up Chalk step entirely.
-  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
 
 run-name: "Docker Image CI ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
@@ -82,7 +82,7 @@ jobs:
 
   docker-buildx-gpu-12:
     needs: enable_build
-    if: needs.enable_build.outputs.enabled == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: needs.enable_build.outputs.enabled == 'true' || 'push' == 'push' || 'push' == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Maximize build space
@@ -134,7 +134,7 @@ jobs:
 
   docker-buildx-gpu-cuda11:
     needs: enable_build
-    if: needs.enable_build.outputs.enabled == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: needs.enable_build.outputs.enabled == 'true' || 'push' == 'push' || 'push' == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Maximize build space
@@ -186,7 +186,7 @@ jobs:
 
   docker-buildx-cpu-openblas:
     needs: enable_build
-    if: needs.enable_build.outputs.enabled == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: needs.enable_build.outputs.enabled == 'true' || 'push' == 'push' || 'push' == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -231,7 +231,7 @@ jobs:
 
   docker-buildx-cpu-mkl:
     needs: enable_build
-    if: needs.enable_build.outputs.enabled == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: needs.enable_build.outputs.enabled == 'true' || 'push' == 'push' || 'push' == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
