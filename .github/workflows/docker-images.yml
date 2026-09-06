@@ -46,8 +46,8 @@ run-name: "Docker Image CI ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}
 jobs:
 
   enable_build:
-    #if: github.repository_owner == 'jtrmal' || github.repository_owner == 'curiosity-tests'
-    if: github.repository_owner == 'curiosity-tests'
+    #if: github.repository_owner == 'jtrmal' || github.repository_owner == 'kaldi-asr'
+    if: github.repository_owner == 'kaldi-asr'
     runs-on: ubuntu-latest
     outputs:
       enabled: ${{ steps.set-enabled.outputs.enabled }}
