@@ -1,10 +1,60 @@
 name: C/C++ CI
 
+# racecar fork-testbed patch. This workflow became the fork's canonical workflow
+# because docker-images.yml cannot be used for measurement: every one of its
+# docker-buildx jobs ends in
+#   `docker build --push --tag kaldiasr/kaldi:...`
+# against the upstream kaldiasr Docker Hub org, behind DOCKERHUB_USERNAME /
+# DOCKERHUB_TOKEN. Its `enable_build` job is pinned to
+# `github.repository_owner == 'kaldi-asr'`, which is a don't-publish-from-a-fork
+# guard and must stay exactly as it is -- so every job in that workflow
+# cascade-skipped and the run reported success having built nothing.
+#
+# Changes from upstream here:
+#   1. workflow_dispatch with a `leg` input, so racecar can trigger a run and
+#      choose baseline vs instrumented. Upstream fires on push/PR only.
+#   2. actions/checkout -> crashappsec/action-checkout, which wraps checkout and
+#      setup-chalk-action together. `chalk:` is the single variable separating
+#      the two arms, and `profile:` selects the observables profile.
+#   3. permissions: id-token: write for the action's OIDC connect. Declaring the
+#      block zeroes every unlisted scope, so contents: read is restated.
+#   4. A fail-closed assertion on the instrumented arm.
+#   5. `sudo apt-get update` before the install. GitHub runners ship no apt
+#      lists, so upstream's bare `apt-get install` cannot resolve a package.
+#      Upstream's only two runs of this workflow (2025-09-22) both failed.
+# The build COMMANDS are byte-identical to upstream.
+
 on:
+  workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: instrumented
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # The one variable that separates the arms: on baseline, action-checkout
+  # skips its Set up Chalk step entirely.
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
+
+run-name: "C/C++ CI ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
 jobs:
   build:
@@ -16,9 +66,29 @@ jobs:
       CC: "ccache gcc"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        # inert at action-checkout@main (not an input there); kept for forward-compat
+        observables_continue_on_error: false
+        # action-checkout defaults LFS on; actions/checkout does not
+        lfs: false
+
+    # Assert on the host-server socket, NOT on LD_PRELOAD: co-monitor's loader
+    # clears LD_PRELOAD once it has injected, so an empty LD_PRELOAD is what
+    # SUCCESS looks like from inside the shell. co-hostd daemonizes, so pgrep is
+    # no good either. Socket existence is what curiosity's own CI gates on.
+    - name: Assert instrumentation is live
+      if: env.CHALK_ON == 'true'
+      run: |
+        test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+        test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+
     - name: Install sox
-      run: sudo apt-get install -y sox intel-mkl
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sox intel-mkl
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
